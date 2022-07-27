@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>STARFiSH Stroop Test</title>
+  <meta charset="utf-8">
+  <meta name="viewport" 
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+</head>
+
+<body style="font-family:arial; text-align:center; background-color:#555555; width:100%; overflow:hidden;"> 
+<div style="transform:scale(2.2); margin-top:250px;">
+  <p id="master" style="font-size:24px; font-weight:bold">Press START</p>
+  <p style="margin-top:30px">
+    <button type="button" id="control" style="width:100px">START</button>
+    </p>
+  
+  <form id="buttonList">
+    <!-- We will populate this later -->
+  </form>
+  <output id="ergebnis"></output><br>
+  <output id="zeit"></output><br><br>
+  <button onclick="onDownload()">Download</button><br>
+  <button onclick="retrieveLocalStorage()">RescueLocalStorage</button>
+  </div>
+</body>
+
+<script type="text/javascript">
+  
+  //protect from unload
+  window.onbeforeunload = function () {
+    return 'Are you sure you want to leave?';
+  }
+  
+  function logForMe(what) {
+    localStorage.setItem(JSON.stringify(Date.now()), JSON.stringify(what));
+    logText.push(what);
+  }
+  
+  //download functions
+  function download(content, fileName, contentType) {
+    const a = document.createElement("a");
+    const file = new Blob([content], { type: contentType });
+    a.href = URL.createObjectURL(file);
+    a.download = fileName;
+    a.click();
+    }
+    
+  function onDownload() {
+    download(JSON.stringify(logText,0,1), "strooplog" + new Date(Date.now()).toISOString() + ".json", "text/plain");
+    }
+  
+  //attention: The storage is not sorted by insertion time.
+  function retrieveLocalStorage() {
+    var storageContents = "";
+    for (let i=0; i < localStorage.length; i++) { 
+      let storageKey = JSON.parse(localStorage.key(i));
+      storageContents += new Date(storageKey).toISOString() + ' : ' + localStorage.getItem(storageKey) + "\n";
+    }
+    download(storageContents,  "stroopLogLocalStorageRescue" + new Date(Date.now()).toISOString() + ".json", "text/plain");
+  }
+  
+  const farben = ["blue","cyan","red","grey","orange","green","purple"];
+  const buttonCount = 7; //must be <= the number of unique colors in the array above
+  const showResult = false;
+  const backgroundColor = "lightgrey";
+  const maxTime = 5000; //in ms
+  var logText = [];
+  var startTime, guess, timer;
+
+  //setup control
+  var controlButton = document.getElementById('control');
+  controlButton.addEventListener('click', startStop, false);
+
+  //for the selection of random colors
+  const chooseColors = (arr, num = 1) => {
+    const res = [];
+    for(let i = 0; i < (num > arr.length ? arr.length : num); ){
+      const random = Math.floor(Math.random() * arr.length);
+      if(res.indexOf(arr[random]) !== -1){
+        continue;
+      };
+      res.push(arr[random]);
+      i++;
+    };
+    return res;
+  };
+
+  var selectedColors;
+  var masterColors;
+  var masterColor;
+  var decoyColor;
+  var masterButton = document.getElementById("master");
+  var buttonsInactive = true;
+    
+  //setup displays
+  if (showResult) {
+    document.getElementById("ergebnis").value = "Ergebnis";
+    document.getElementById("zeit").value = "Zeit";
+  }
+
+  //setup buttons the first time
+  var buttons = Array(buttonCount);
+  var container = document.getElementById('buttonList');
+  for (let i = 0; i < buttonCount; i++) {
+    var currentButton = document.createElement('button');
+    currentButton.type = 'button';
+    currentButton.id = 'colorButton' + i;
+    currentButton.innerHTML = '...';
+    //currentButton.className = 'btn-styled';
+    currentButton.addEventListener('click', evaluateColor, false);
+    currentButton.style.width = "100px";
+    buttons[i] = currentButton;
+    container.appendChild(currentButton);
+    container.append(document.createElement("br"));
+  }
+
+
+//14:56.345, action:start;
+//14:57.380, action:selected, written:blue, color:yellow, selected:yellow, correct:yes, time:1.035;
+
+  //instantiate colors
+  function run() {
+    selectedColors = chooseColors(farben, buttonCount);
+    masterColors = chooseColors(selectedColors, 2);
+    masterColor = masterColors[0];
+    decoyColor = masterColors[1];
+    masterButton.innerHTML = decoyColor.toUpperCase();
+    masterButton.style.color = masterColor;
+    console.log(selectedColors);
+    console.log(masterColor);
+    console.log(decoyColor);
+    logForMe(
+    {
+      "action" : "started",
+      "clickTime" : new Date(startTime).toISOString(),
+      //"buttonCount" : buttonCount,
+      //"selectedColors" : selectedColors,
+      "masterColor" : masterColor,
+      "decoyColor" : decoyColor
+    }
+    )
+    
+    //label buttons
+    for (let i = 0; i < buttons.length; i++) {
+      var currentButton = buttons[i];
+      currentButton.innerHTML = selectedColors[i].toUpperCase();
+    }
+    
+  }
+    
+  //did the user select the correct button?
+  function evaluateColor (event) {
+    if (buttonsInactive) return;
+    if (!startTime) return;
+    guess++;
+    const clickTime = Date.now();
+    const chosenColor = event.target.innerHTML;
+    const masterColor = document.getElementById("master").style.color.toUpperCase();
+    const isSame = masterColor == chosenColor ? "correct" : "wrong";
+    const performanceTime = (clickTime - startTime) / 1000
+    clearTimeout(timer);
+    hideButtons();
+
+    if (showResult) {
+      document.getElementById("ergebnis").value = isSame;
+      document.getElementById("zeit").value = performanceTime + "s";
+      }
+    
+    logForMe(
+    {
+      "action" : "chosen",
+      "clickTime" : new Date(clickTime).toISOString(),
+//      "buttonCount" : buttonCount,
+//      "selectedColors" : selectedColors,
+      "masterColor" : masterColor.toLowerCase(),
+      "decoyColor" : decoyColor.toLowerCase(),
+//      "chosenColor" : chosenColor.toLowerCase(),
+      "correctResult" : isSame,
+      "performanceTime" : performanceTime
+//      "guess" : guess
+    }
+    );
+  }
+  
+  function hideButtons() {
+    for (let i = 0; i < buttonCount; i++) {
+      var button = document.getElementById("colorButton" + i);
+      button.innerHTML = "...";
+    }
+    masterButton.innerHTML = "...";
+    masterButton.style.color = backgroundColor;
+  }
+  
+  function timeout() {
+    buttonsInactive = true;
+    hideButtons();
+    logForMe(
+    {
+      "action" : "chosen",
+      "clickTime" : new Date(Date.now()).toISOString(),
+//      "buttonCount" : buttonCount,
+//      "selectedColors" : selectedColors,
+      "masterColor" : masterColor.toLowerCase(),
+      "decoyColor" : decoyColor.toLowerCase(),
+//      "chosenColor" : chosenColor.toLowerCase(),
+      "correctResult" : "timeout",
+      "performanceTime" : maxTime
+//      "guess" : guess
+    }
+    );
+
+  }
+
+  function startStop (event) {
+    buttonsInactive = false;
+    clearTimeout(timer);
+    timer = setTimeout(timeout, maxTime);
+    startTime = Date.now();
+    guess = 0;
+    run();
+  }
+
+</script>
+</html>
